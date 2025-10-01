@@ -28,23 +28,16 @@ type PdfJsPage = { getTextContent: () => Promise<PdfJsTextContent> };
 type PdfJsDocument = { numPages: number; getPage: (n: number) => Promise<PdfJsPage> };
 type PdfJsLoadingTask = { promise: Promise<PdfJsDocument> };
 
-/**
- * Robust text extraction with pdf.js (legacy build, no worker).
- * NOTE: pdf.js requires Uint8Array (not Buffer).
- * Logs sample items for debugging and concatenates strings safely.
- */
 async function extractTextWithPdfJs(u8: Uint8Array): Promise<string> {
   const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const task: PdfJsLoadingTask = getDocument({ data: u8, disableWorker: true });
   const doc: PdfJsDocument = await task.promise;
 
   let out = "";
-
   for (let i = 1; i <= doc.numPages; i++) {
     const page: PdfJsPage = await doc.getPage(i);
     const text: PdfJsTextContent = await page.getTextContent();
 
-    // Debug: see what pdf.js sees
     console.log(`PDFJS Page ${i} items count:`, text.items.length);
     console.log(`PDFJS Page ${i} items sample:`, text.items.slice(0, 10));
 
@@ -55,18 +48,15 @@ async function extractTextWithPdfJs(u8: Uint8Array): Promise<string> {
     }
     out += line.trimEnd() + "\n";
   }
-
   return out.trim();
 }
 
 export async function GET() {
   try {
     const supabase = await createSupabaseRouteClient();
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.getSession();
-    if (error || !session) {
+
+    const { data, error } = await supabase.auth.getUser(); // ✅ fixed name
+    if (error || !data?.user) {
       return json(401, { step: "AUTH_GET", error: error?.message ?? "Unauthorized", session: false });
     }
 
@@ -86,19 +76,16 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-   const supabase = await createSupabaseRouteClient();
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+    const supabase = await createSupabaseRouteClient();
 
-    if (sessionError || !session?.user) {
-      return json(401, { step: "AUTH", error: sessionError?.message ?? "Unauthorized" });
+    const { data, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !data?.user) {
+      return json(401, { step: "AUTH", error: userErr?.message ?? "Unauthorized" });
     }
-    const userId = session.user.id;
+    const userId = data.user.id;
     const contentType = req.headers.get("content-type") ?? "";
 
-    // ---------- JSON: create text material ----------
+    // ---------- JSON ----------
     if (contentType.includes("application/json")) {
       let body: { title?: string; content?: string } | undefined;
       try {
@@ -125,11 +112,10 @@ export async function POST(req: Request) {
         console.error("MATERIALS_INSERT_TEXT", insErr);
         return json(400, { step: "DB_INSERT_TEXT", error: insErr.message });
       }
-
       return json(201, { ok: true, type: "text" });
     }
 
-    // ---------- multipart/form-data: create pdf material ----------
+    // ---------- multipart/form-data: PDF ----------
     if (contentType.includes("multipart/form-data")) {
       const form = await req.formData();
       const title = form.get("title");
@@ -142,7 +128,6 @@ export async function POST(req: Request) {
         return json(400, { step: "FORM_FILETYPE", error: "File must be a PDF" });
       }
 
-      // Read as Uint8Array for parsers (and keep original File for upload)
       let u8: Uint8Array;
       try {
         const arrayBuffer = await file.arrayBuffer();
@@ -152,7 +137,6 @@ export async function POST(req: Request) {
         return json(400, { step: "PDF_ARRAYBUFFER", error: "Failed to read uploaded file" });
       }
 
-      // Try pdf-parse first (some PDFs only work here)
       let extractedText = "";
       try {
         const pdfParse = await loadPdfParse();
@@ -164,7 +148,6 @@ export async function POST(req: Request) {
         console.warn("PDF_PARSE_PRIMARY_FAIL (will try fallback)", err);
       }
 
-      // Fallback to pdfjs-dist (expects Uint8Array, NOT Buffer)
       if (!extractedText) {
         try {
           extractedText = (await extractTextWithPdfJs(u8)).trim();
@@ -178,7 +161,6 @@ export async function POST(req: Request) {
         return json(422, { step: "PDF_EMPTY", error: "No text found in PDF" });
       }
 
-      // Upload original file directly (no need to re-wrap Buffer)
       const safeName = file.name.replace(/\s+/g, "_");
       const storagePath = `${userId}/${Date.now()}-${safeName}`;
 
@@ -194,7 +176,6 @@ export async function POST(req: Request) {
         return json(400, { step: "STORAGE_UPLOAD", error: upErr.message });
       }
 
-      // Insert DB row with extracted text
       const { error: insErr } = await supabase.from("materials").insert({
         user_id: userId,
         title,
@@ -208,7 +189,6 @@ export async function POST(req: Request) {
         await supabase.storage.from("materials").remove([storagePath]);
         return json(400, { step: "DB_INSERT_PDF", error: insErr.message });
       }
-
       return json(201, { ok: true, type: "pdf" });
     }
 

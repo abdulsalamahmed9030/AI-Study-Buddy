@@ -1,11 +1,9 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-
+import { getUserServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export default async function SupabasePingPage() {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getSession();
+  const user = await getUserServer();
 
   return (
     <div className="mx-auto max-w-xl space-y-4 p-6">
@@ -15,16 +13,16 @@ export default async function SupabasePingPage() {
           URL: <code className="font-mono">{process.env.NEXT_PUBLIC_SUPABASE_URL}</code>
         </p>
         <p className="text-sm">
-          Session present: <span className="font-mono">{Boolean(data.session).toString()}</span>
+          Session present: <span className="font-mono">{Boolean(user).toString()}</span>
         </p>
-        {error ? (
-          <p className="text-sm text-red-600">Error: {error.message}</p>
+        {user ? (
+          <p className="text-sm text-green-600">OK: logged in as {user.email}</p>
         ) : (
-          <p className="text-sm text-green-600">OK: client is initialized</p>
+          <p className="text-sm text-red-600">Not logged in (expected if signed out)</p>
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Tip: If you’re logged out, Session will be false (expected).
+        Tip: This checks server-side auth with <code>getUserServer()</code>.
       </p>
     </div>
   );

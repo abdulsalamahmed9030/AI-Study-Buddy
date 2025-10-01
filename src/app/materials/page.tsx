@@ -1,21 +1,24 @@
 // src/app/materials/page.tsx
 import AppShell from "@/components/layout/AppShell";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient, getUserServer } from "@/lib/supabase/server";
 import { SummarizeButton } from "./SummarizeButton";
 
 type MaterialRow = {
   id: string;
   title: string;
-  type: string;
+  type: "text" | "pdf"; // tighten type if these are the only values
   created_at: string;
 };
 
 export default async function MaterialsPage() {
-  const supabase = await createSupabaseServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) {
+  // Server-verified user (no getSession)
+  const user = await getUserServer();
+  if (!user) {
     return <div className="p-6">Not signed in.</div>;
   }
+
+  // RSC read-only client for DB reads
+  const supabase = await createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from("materials")
@@ -27,7 +30,7 @@ export default async function MaterialsPage() {
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as MaterialRow[];
+  const rows: MaterialRow[] = (data ?? []) as MaterialRow[];
 
   return (
     <AppShell>

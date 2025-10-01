@@ -28,14 +28,24 @@ export default function Navbar() {
               <SidebarLinks />
             </SheetContent>
           </Sheet>
-          <Link href="/" className="font-semibold">AI Study Buddy</Link>
+          <Link href="/" className="font-semibold">
+            AI Study Buddy
+          </Link>
         </div>
 
         <div className="flex items-center gap-2">
           <DarkModeToggle />
-          <Button asChild size="sm">
+
+          <Button asChild size="sm" variant="secondary">
             <Link href="/dashboard">Dashboard</Link>
           </Button>
+
+          {/* Sign out posts to our server route for a clean logout */}
+          <form method="post" action="/auth/sign-out">
+            <Button type="submit" size="sm" variant="outline">
+              Sign out
+            </Button>
+          </form>
         </div>
       </div>
     </header>

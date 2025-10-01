@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getUserServer } from "@/lib/supabase/server";
 import AppShell from "@/components/layout/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -7,15 +7,12 @@ export const dynamic = "force-dynamic";
 
 // Server Component — no "use client" here
 export default async function DashboardPage() {
-  const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getSession();
+  const user = await getUserServer();
 
   // If not logged in, kick to sign-in
-  if (error || !data.session) {
+  if (!user) {
     redirect("/auth/sign-in");
   }
-
-  const { user } = data.session;
 
   return (
     <AppShell>

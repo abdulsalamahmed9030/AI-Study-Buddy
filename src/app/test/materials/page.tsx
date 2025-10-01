@@ -1,14 +1,15 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { createSupabaseServerClient, getUserServer } from "@/lib/supabase/server";
 
 export default async function MaterialsTest() {
+  const user = await getUserServer();
+  if (!user) redirect("/auth/sign-in");
+
   const supabase = await createSupabaseServerClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) redirect("/auth/sign-in");
 
   const { data, error } = await supabase
     .from("materials")
-    .select("id,title,type,created_at")
+    .select("id, title, type, created_at")
     .order("created_at", { ascending: false });
 
   return (
