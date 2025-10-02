@@ -1,12 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const MODEL = "models/gemini-2.0-flash"; // ✅ use a supported model
+const MODEL = "models/gemini-2.0-flash";
 
 export async function summarizeText(content: string): Promise<string> {
   const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  if (!key) {
-    throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY");
-  }
+  if (!key) throw new Error("Missing GOOGLE_GENERATIVE_AI_API_KEY");
 
   const genAI = new GoogleGenerativeAI(key);
   const model = genAI.getGenerativeModel({ model: MODEL });
@@ -23,9 +21,7 @@ ${truncated}
     const resp = await model.generateContent(prompt);
     const text = resp.response.text().trim();
 
-    if (!text) {
-      throw new Error("Gemini returned empty summary"); 
-    }
+    if (!text) throw new Error("Gemini returned empty summary");
 
     return text;
   } catch (err: unknown) {

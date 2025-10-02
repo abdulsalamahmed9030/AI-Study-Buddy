@@ -6,8 +6,8 @@ import { createSupabaseServerClient, getUserServer } from "@/lib/supabase/server
 type SummaryRow = {
   id: string;
   material_id: string | null;
+  title?: string | null;
   summary: string;
-  title?: string | null; // ✅ material title
   model?: string | null;
   created_at?: string | null;
 };
@@ -16,7 +16,6 @@ export const revalidate = 0;
 
 export default async function SummariesPage() {
   const supabase = await createSupabaseServerClient();
-
   const user = await getUserServer();
   if (!user) redirect("/auth/sign-in");
 
@@ -66,7 +65,7 @@ export default async function SummariesPage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h2 className="text-sm font-medium truncate">
-                    {s.title ?? "Untitled material"} {/* ✅ display title */}
+                    {s.title ?? "Untitled material"}
                   </h2>
                   <p className="mt-2 text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">
                     {s.summary}
@@ -79,7 +78,6 @@ export default async function SummariesPage() {
                     </time>
                   </div>
                 </div>
-
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   {s.material_id ? (
                     <Link

@@ -8,10 +8,7 @@ function json(status: number, payload: unknown) {
   return NextResponse.json(payload, { status });
 }
 
-const CURRENT_MODEL_ID = "models/gemini-2.0-flash";
-
-type PostBody = { materialId?: string };
-
+// Minimal row types
 type MaterialRow = {
   id: string;
   user_id: string;
@@ -21,88 +18,62 @@ type MaterialRow = {
 
 type SummaryRow = {
   id: string;
-  material_id: string | null;
+  material_id: string;
   user_id: string;
-  title: string | null;
-  model: string | null;
-  tokens?: number | null;
+  title: string;
+  model: string;
   summary: string;
+  tokens?: number | null;
   created_at?: string | null;
 };
 
 /**
  * POST /api/summaries
- * Body: { materialId: string }
  */
 export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseRouteClient();
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData?.user) {
-      return json(401, { step: "AUTH", error: userErr?.message ?? "Unauthorized" });
-    }
+    if (userErr || !userData?.user) return json(401, { error: "Unauthorized" });
     const userId = userData.user.id;
 
-    let body: PostBody | undefined;
-    try {
-      body = (await req.json()) as PostBody;
-    } catch {
-      return json(400, { step: "JSON_PARSE", error: "Invalid JSON" });
-    }
+    const body = (await req.json()) as { materialId?: string };
+    if (!body.materialId) return json(400, { error: "materialId is required" });
 
-    const materialId = body?.materialId;
-    if (!materialId) {
-      return json(400, { step: "VALIDATE", error: "materialId is required" });
-    }
-
+    // Fetch material
     const { data: material, error: mErr } = await supabase
       .from("materials")
       .select("id, user_id, title, content")
-      .eq("id", materialId)
+      .eq("id", body.materialId)
       .single<MaterialRow>();
 
-    if (mErr || !material) {
-      return json(404, { step: "FETCH_MATERIAL", error: mErr?.message ?? "Material not found" });
-    }
+    if (mErr || !material) return json(404, { error: "Material not found" });
+    if (material.user_id !== userId) return json(403, { error: "Forbidden" });
 
-    if (material.user_id !== userId) {
-      return json(403, { step: "OWNERSHIP", error: "Forbidden" });
-    }
+    // Generate summary using Gemini
+    const summary = await summarizeText(material.content);
 
-    // Summarize
-    let summaryText = "";
-    try {
-      summaryText = await summarizeText(material.content);
-      if (typeof summaryText !== "string") summaryText = String(summaryText ?? "");
-    } catch (e: unknown) {
-      console.error("GEMINI_SUMMARY_ERROR", e);
-      return json(502, { step: "GEMINI", error: "Failed to summarize" });
-    }
-
-    // Insert summary with material title
+    // Insert summary
     const { data: inserted, error: insErr } = await supabase
       .from("summaries")
       .insert({
         material_id: material.id,
         user_id: userId,
         title: material.title ?? "Untitled material",
-        model: CURRENT_MODEL_ID,
+        model: "models/gemini-2.0-flash",
+        summary,
         tokens: null,
-        summary: summaryText,
       })
       .select()
       .single<SummaryRow>();
 
-    if (insErr) {
-      console.error("SUMMARY_INSERT_ERROR", insErr);
-      return json(400, { step: "DB_INSERT", error: insErr.message });
-    }
+    if (insErr) return json(400, { error: insErr.message });
 
     return json(201, { ok: true, summary: inserted });
-  } catch (err: unknown) {
+  } catch (err) {
     console.error("SUMMARIES_ROUTE_FATAL", err);
-    return json(500, { step: "FATAL", error: "Internal error" });
+    return json(500, { error: "Internal server error" });
   }
 }
 
@@ -114,9 +85,7 @@ export async function GET(req: Request) {
     const supabase = await createSupabaseRouteClient();
 
     const { data: userData, error: userErr } = await supabase.auth.getUser();
-    if (userErr || !userData?.user) {
-      return json(401, { error: userErr?.message ?? "Unauthorized" });
-    }
+    if (userErr || !userData?.user) return json(401, { error: "Unauthorized" });
 
     const { searchParams } = new URL(req.url);
     const materialId = searchParams.get("materialId");
@@ -124,17 +93,17 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase
       .from("summaries")
-      .select("id, title, summary, model, created_at")
+      .select("summary")
       .eq("material_id", materialId)
       .order("created_at", { ascending: false })
       .limit(1)
       .single<SummaryRow>();
 
-    if (error || !data) return json(404, { error: error?.message ?? "Summary not found" });
+    if (error || !data) return json(404, { error: "Summary not found" });
 
-    return json(200, { summary: data });
-  } catch (err: unknown) {
+    return json(200, { summary: data.summary });
+  } catch (err) {
     console.error("SUMMARIES_GET_FATAL", err);
-    return json(500, { error: "Internal error" });
+    return json(500, { error: "Internal server error" });
   }
 }
