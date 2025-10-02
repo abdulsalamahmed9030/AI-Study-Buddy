@@ -36,18 +36,23 @@ export default function NewMaterialPage() {
   async function submitText(values: CreateTextMaterialValues) {
     setErr(null);
     setLoading(true);
+
+    // Save text material with title and content
     const res = await fetch("/api/materials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: values.title, content: values.content }),
+      body: JSON.stringify({ title: values.title || "Untitled material", content: values.content }),
       credentials: "same-origin", // ✅ send Supabase auth cookies
     });
+
     setLoading(false);
+
     if (!res.ok) {
       const j = (await res.json()) as { error?: string; step?: string };
       setErr(`${j.step ?? "SERVER"}: ${j.error ?? "Failed to save"}`);
       return;
     }
+
     router.push("/materials");
   }
 
@@ -77,12 +82,15 @@ export default function NewMaterialPage() {
       body: fd,
       credentials: "same-origin", // ✅ send Supabase auth cookies
     });
+
     setLoading(false);
+
     if (!res.ok) {
       const j = (await res.json()) as { error?: string; step?: string };
       setErr(`${j.step ?? "SERVER"}: ${j.error ?? "Failed to save"}`);
       return;
     }
+
     router.push("/materials");
   }
 
