@@ -11,7 +11,7 @@ type MaterialRow = {
   created_at: string;
 };
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 5;
 
 export default async function MaterialsPage({
   searchParams,

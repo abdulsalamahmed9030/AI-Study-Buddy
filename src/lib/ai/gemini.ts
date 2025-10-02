@@ -24,7 +24,7 @@ ${truncated}
     const text = resp.response.text().trim();
 
     if (!text) {
-      throw new Error("Gemini returned empty summary");
+      throw new Error("Gemini returned empty summary"); 
     }
 
     return text;
