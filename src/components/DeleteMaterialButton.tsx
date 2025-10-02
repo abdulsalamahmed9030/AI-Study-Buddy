@@ -17,8 +17,9 @@ export function DeleteMaterialButton({ materialId }: { materialId: string }) {
 
     setSubmitting(true);
     try {
+      // Your API route is /api/materials/[id]/delete
       const res = await fetch(`/api/materials/${materialId}/delete`, {
-        method: "DELETE", // ✅ matches your route at /api/materials/[id]/delete
+        method: "DELETE",
       });
 
       if (res.ok) {

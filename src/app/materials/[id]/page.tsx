@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { Suspense } from "react";
 import { SummarizeButton } from "../SummarizeButton";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DeleteMaterialButton } from "@/components/DeleteMaterialButton";
 
 type Material = {
   id: string;
@@ -25,7 +26,7 @@ type SummaryResolved = {
   material_id: string;
   created_at: string;
   model?: string | null;
-  content: string | null; // resolved content from whatever column exists
+  content: string | null;
 };
 
 async function getMaterial(id: string): Promise<Material | null> {
@@ -43,16 +44,7 @@ async function getMaterial(id: string): Promise<Material | null> {
 /** Pick the first non-empty string among likely content columns. */
 function resolveSummaryContent(row: AnyRow | null | undefined): string | null {
   if (!row) return null;
-  const candidates = [
-    "content",
-    "summary",
-    "text",
-    "body",
-    "markdown",
-    "result",
-    "output",
-  ] as const;
-
+  const candidates = ["content", "summary", "text", "body", "markdown", "result", "output"] as const;
   for (const key of candidates) {
     const v = row[key as keyof AnyRow];
     if (typeof v === "string" && v.trim().length > 0) return v.trim();
@@ -63,7 +55,6 @@ function resolveSummaryContent(row: AnyRow | null | undefined): string | null {
 async function getLatestSummaryFromDB(materialId: string): Promise<SummaryResolved | null> {
   const supabase = await createSupabaseServerClient();
 
-  // Select * to avoid column-not-found errors on differing schemas
   const { data, error } = await supabase
     .from("summaries")
     .select("*")
@@ -76,18 +67,23 @@ async function getLatestSummaryFromDB(materialId: string): Promise<SummaryResolv
 
   const row = data[0] as AnyRow;
 
-  // Pull required fields with safe guards
-  const id = (row.id ?? "") as string;
-  const mid = (row.material_id ?? "") as string;
-  const created_at = (row.created_at ?? "") as string;
-  const model = (typeof row.model === "string" ? row.model : null) as string | null;
-
-  const content = resolveSummaryContent(row);
-
-  return { id, material_id: mid, created_at, model, content };
+  return {
+    id: (row.id ?? "") as string,
+    material_id: (row.material_id ?? "") as string,
+    created_at: (row.created_at ?? "") as string,
+    model: typeof row.model === "string" ? row.model : null,
+    content: resolveSummaryContent(row),
+  };
 }
 
-export default async function MaterialDetailPage(props: { params: { id: string } }) {
+export default async function MaterialDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  // Next 15: params is a Promise — you MUST await it
+  const { id } = await params;
+
   const user = await getUserServer();
   if (!user) {
     return (
@@ -97,7 +93,7 @@ export default async function MaterialDetailPage(props: { params: { id: string }
     );
   }
 
-  const material = await getMaterial(props.params.id);
+  const material = await getMaterial(id);
   if (!material) {
     return (
       <AppShell>
@@ -139,6 +135,7 @@ export default async function MaterialDetailPage(props: { params: { id: string }
             <button className="rounded-2xl border px-3 py-2 text-sm" disabled title="Coming soon">
               Generate Quiz
             </button>
+            <DeleteMaterialButton materialId={material.id} />
           </div>
         </div>
 
@@ -170,9 +167,7 @@ export default async function MaterialDetailPage(props: { params: { id: string }
           <CardContent className="prose max-w-none dark:prose-invert">
             <Suspense fallback={<Skeleton className="h-40 w-full rounded-2xl" />}>
               {material.content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {material.content}
-                </ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{material.content}</ReactMarkdown>
               ) : (
                 <p className="text-sm text-muted-foreground">No content extracted.</p>
               )}
